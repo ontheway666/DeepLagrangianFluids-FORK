@@ -11,11 +11,14 @@ from collections import namedtuple
 from glob import glob
 import time
 import tensorflow as tf
+from prms import prmcontinueModel,continueModelname
+
+
 
 # 会改变loss走向
-tf.random.set_seed(1234)
-tf.compat.v1.set_random_seed(1234)
-np.random.seed(1234)
+tf.random.set_seed(5678)
+tf.compat.v1.set_random_seed(5678)
+np.random.seed(5678)
 
 # print('\n\n\n[train]\n\n\n')
 # xx=tf.random.normal((1,1))
@@ -39,19 +42,25 @@ train_params = TrainParams(50 * _k, 0.001, 16)
 
 #prm-------------------
 #如果是涡度数据，就忽略yaml
+prm_movecontainer=0
+# 训练过程中移动容器
+
 bvor=1
 bdebug=0
+
 
 storetensor=1
 storelist=1
 
+
 cut_thres=4.0
+
+
 jsoname="lowfluid7.json"
 # jsoname="lowfluid4.json"
 # jsoname="lowfluid5.json"
 jsoname="default.json"
 jsoname="multi-10.json"
-
 jsoname="temp.json"
 jsoname="multi-10dense.json"
 jsoname="lowfluidS.json"
@@ -246,10 +255,20 @@ def mynext():#know
                     print('[reading file...],sceneidx='+str(sceneidx))
                 posname=dtdir+basescene+str(sceneidx+1)+"_output/particle_object_0_"
                 velname=dtdir+basescene+str(sceneidx+1)+"_output/velocity_object_0_"
+                # containerposname=dtdir+basescene+str(sceneidx+1)+"_output/containerpos.npy"
 
+            print('frame 1st ='+str(frameid))
             pos0=get1ply(posname+f"{frameid+0}.ply")
             pos1=get1ply(posname+f"{frameid+1}.ply")
             pos2=get1ply(posname+f"{frameid+2}.ply")
+
+        
+            # pos0=get1ply(posname+"{0:06}.ply".format(frameid+0))
+            # pos1=get1ply(posname+"{0:06}.ply".format(frameid+1))
+            # pos2=get1ply(posname+"{0:06}.ply".format(frameid+2))
+
+            if(prm_movecontainer):
+                containerpos=np.load(containerposname)
 
             if(prm_cconvSceneConfig==0):
                 boxp=np.load(dtdir+"bp-"+basescene+"-r"+str(sceneidx)+".npy")
@@ -262,6 +281,18 @@ def mynext():#know
                     cconvboxid = json.load(f)["RigidBodies"][0]["boxid"]
                 boxp=np.load("../datasets/Box_"+ str(cconvboxid)+".npy")
                 boxn=np.load("../datasets/BoxN_"+str(cconvboxid)+".npy")
+
+
+                if(prm_movecontainer):
+                    print(containerpos.shape)#1000 3
+                    print(frameid)#start from 1
+                    print(containerpos[0])
+                    print(sceneidx)#0
+                    boxp+=containerpos[0]* ((frameid-1)*4+1)
+                    # [0] 1 2 3
+                    # [4]
+
+                    # assert(False)
 
                 
                 
@@ -407,6 +438,7 @@ def main():
         cfg = yaml.safe_load(f)
         yamlname=args.cfg.split(".")[0]
         if(yamlname!=jsoname.split(".")[0]):
+            # 强制json和yaml使用相同的名字
             print("[Err]\t yaml json not match")
             exit(0)
     # the train dir stores all checkpoints and summaries. The dir name is the name of this file combined with the name of the config file
@@ -435,6 +467,13 @@ def main():
     trainer = Trainer(train_dir)
 
     model = create_model(**cfg.get('model', {}))
+    model.init()
+    if(prmcontinueModel):
+        print("[continue on Model]")
+        model.load_weights(continueModelname,by_name=True)
+
+
+
 
     boundaries = [
         25 * _k,
