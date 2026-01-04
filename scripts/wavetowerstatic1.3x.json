@@ -1,0 +1,59 @@
+{
+    "walls":[
+        {
+            "path":"../datasets/models/wavetowerbox.obj",
+            "scale":2.6,
+            "translation":[
+                0,
+                0,
+                0
+            ]
+        },
+		{
+            "objectId": 1,
+			"path": "../datasets/models/wavetowerboard.obj",
+			"translation": [0.0, 0.0, 0.0],
+            "scale":2.6,
+            "invert_normals":1,
+			"rotationAxis": [0, 0, 1],
+			"rotationAngle": 0,
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [255, 255, 255], 
+			"isDynamic": false
+		},
+        {
+            "objectId": 1,
+			"path": "../datasets/models/mini_tower.obj",
+            "translation": [7.8, 1.04, 3.9],
+            "invert_normals":1,
+			"rotationAxis": [0, 0, 1],
+			"rotationAngle": 0,
+			"scale": 1.56,
+			"velocity": [0.0, 0.0, 0.0],
+			"density": 1000.0,
+			"color": [255, 255, 255], 
+			"isDynamic": false
+		}
+
+        
+    ],
+    "fluids":[
+        {
+            "path":"../datasets/models/Box_001.obj",
+            "velocity":[
+                0.0,
+                0,
+                0.0
+            ],
+            "translation":[
+                0,
+                0,
+                0
+            ],
+            "start":0,
+            "stop":1,
+            "step":1
+        }
+    ]
+}
