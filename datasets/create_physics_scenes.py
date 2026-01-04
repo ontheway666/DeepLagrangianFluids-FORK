@@ -196,10 +196,19 @@ def obj_volume_to_particles(objpath, scale=1, radius=None):
         return numpy_from_bgeo(outpath)
 
 #zxc mesh到particle并给出法向量
-def obj_surface_to_particles(objpath, radius=None):
+def obj_surface_to_particles(objpath,scalefactor=-1, radius=None):
     if radius is None:
         radius = PARTICLE_RADIUS
     obj = o3d.io.read_triangle_mesh(objpath)
+
+
+    if(isinstance(scalefactor,int) and scalefactor==-1):
+        pass
+    else:
+        obj=obj.scale(scalefactor,np.array([0,0,0]))
+        #都绕着物体中心放缩
+
+
     particle_area = np.pi * radius**2
     # 1.9 to roughly match the number of points of SPlisHSPlasHs surface sampling
     num_points = int(1.9 * obj.get_surface_area() / particle_area)
