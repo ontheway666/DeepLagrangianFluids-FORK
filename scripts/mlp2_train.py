@@ -3,12 +3,18 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense  
 from tensorflow.keras.optimizers import Adam  
 import numpy as np  
+from prms import *
 tf.random.set_seed(1234)
 np.random.seed(1234)
 
+
+
 prm_load=0
-prm_train=1
+prmTrainMLP = prm_mix
+assert(prmTrainMLP)
 prm_save=1
+
+
 
 #MLP解决线性规划问题：
 
@@ -140,6 +146,8 @@ else:
                 loss=custom_loss)  
     
   
+# model.summary()
+# exit(0)
 
   
 # 训练模型  
@@ -151,7 +159,7 @@ else:
 # 我们实际上可以省略steps_per_epoch和batch_size参数，除非我们有特定的需求。  
 # 然而，为了教育目的，我们将在这里明确设置它们。  
 batch_size = 32  
-if(prm_train):
+if(prmTrainMLP):
     model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size)  
   
 # 注意：上面的代码实际上设置了每个epoch有3个批次（因为48个样本/16个批次/epoch=3），  
