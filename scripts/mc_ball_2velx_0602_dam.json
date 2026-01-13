@@ -1,0 +1,39 @@
+{
+    "walls":[
+        {
+            "path":"../datasets/models/0602 dam box.obj",
+            "translation":[
+                0,
+                0,
+                0
+            ]
+        },
+        {
+            "path":"../datasets/models/0602 dam ball.obj",
+            "translation":[
+                0,
+                0,
+                0
+            ],
+            "invert_normals":1
+        }
+    ],
+    "fluids":[
+        {
+            "path":"../datasets/models/0602 dam fluid.obj",
+            "velocity":[
+                2.5,
+                0,
+                0.0
+            ],
+            "translation":[
+                0,
+                0,
+                0
+            ],
+            "start":0,
+            "stop":1,
+            "step":1
+        }
+    ]
+}
