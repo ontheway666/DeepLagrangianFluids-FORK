@@ -3,6 +3,7 @@ import time
 
 from tuneCurve import *
 from util import getnpz
+from prms import *
 # gpus = tf.config.experimental.list_physical_devices('GPU')
 # if gpus:
 #   try:
@@ -11,6 +12,8 @@ from util import getnpz
 #   except RuntimeError as e:
 #     print(e)
 
+
+fe_inited=False
 
 
 #如果同时需要运行taichi，要记得限制内存-------------
@@ -57,25 +60,26 @@ from train_network_tf import bvor,dt_frame
 
 tempcnt=0
 from energy import *
-from run_network import prm_maxenergy,prm_pointwise,prm_area,prm_sus,\
+from prms import prm_maxenergy,prm_pointwise,prm_area,prm_sus,\
 prm_linear,prm_customtune,prm_mlpexact,prm_mlpexact_2,\
 prm_needratio,\
 prm_energyratio,\
 ratio0,\
 prm_3dim,\
 prm_exactarg,\
-prm_horizon,\
+prm_slopeGravity,\
+prm_0gravity,\
 prmmixstable,\
 prmstableratio,\
 prmtune0,\
 prmtuneend,\
-prm_exportgap
+prm_exportgap,\
+prmfixcoff
 
 
 
 
 
-prm_train=0
 
 if(prm_linear):
     if(prm_mlpexact):
@@ -96,7 +100,7 @@ if(prm_linear):
 class MyParticleNetwork(tf.keras.Model):
 
     def __init__(self,
-                 kernel_size=[4, 4, 4],#整数
+                 kernel_size=[4, 4, 4],#整数，核的分辨率
                  radius_scale=1.5,
                  coordinate_mapping='ball_to_cube_volume_preserving',
                  interpolation='linear',
@@ -120,6 +124,7 @@ class MyParticleNetwork(tf.keras.Model):
         #zxc add
         self.mtimes=[0,0,0,0]
         self.aenergy=[]
+        self.amv=[]
         self.adelta_energy=[]
         self.adelta_energy2=[]
         self.acoff=[]
@@ -150,8 +155,11 @@ class MyParticleNetwork(tf.keras.Model):
         self.prm_linear=prm_linear
 
 
-        if(prm_horizon):
+        if(prm_slopeGravity):
             gravity=(1.5, -9.6845, 0)
+        elif(prm_0gravity):
+            gravity=(0.0,0.0,0.0)
+
          
 
 
@@ -183,10 +191,19 @@ class MyParticleNetwork(tf.keras.Model):
         #     self.particle_radius=0.03
 
 
-        self.filter_extent = np.float32(self.radius_scale * 6 *
+        self.filter_extent0 = np.float32(self.radius_scale * 6 *
                                         self.particle_radius)
-        
-        
+
+        if(prmFE):
+            self.filter_extent = np.float32(prmFEval *
+                                            self.particle_radius)
+            
+        else:
+            self.filter_extent = self.filter_extent0
+
+        fe_inited=True
+
+            
         self.timestep = timestep
         if(bvor):
             self.timestep=dt_frame
@@ -199,23 +216,52 @@ class MyParticleNetwork(tf.keras.Model):
         def window_poly6(r_sqr):
             return tf.clip_by_value((1 - r_sqr)**3, 0, 1)
 
-        def Conv(name, activation=None, **kwargs):
-            conv_fn = ml3d.layers.ContinuousConv
+        def Conv(name, activation=None,symmetric=False, **kwargs):
+
+
+
+            # print("当前工作目录:", os.getcwd())
+
+            if(prmdmcf):
+                sys.path.append('../models/')
+                from convolutionsdmcf import ContinuousConv
+                conv_fn = ContinuousConv
+                print('[DMCF]')
+            else:
+                conv_fn = ml3d.layers.ContinuousConv
+                print('[CCONV]')
+
+
 
             window_fn = None
             if self.use_window == True:
                 window_fn = window_poly6
 
-            conv = conv_fn(name=name,
-                           kernel_size=self.kernel_size,
-                           activation=activation,
-                           align_corners=True,
-                           interpolation=self.interpolation,
-                           coordinate_mapping=self.coordinate_mapping,
-                           normalize=False,
-                           window_function=window_fn,
-                           radius_search_ignore_query_points=True,
-                           **kwargs)
+            # API
+            if(prmdmcf):
+                conv = conv_fn(name=name,
+                            kernel_size=self.kernel_size,
+                            activation=activation,
+                            align_corners=True,
+                            interpolation=self.interpolation,
+                            coordinate_mapping=self.coordinate_mapping,
+                            normalize=False,
+                            window_function=window_fn,
+                            radius_search_ignore_query_points=True,
+                            symmetric=symmetric,
+                            sym_axis=1,
+                            **kwargs)     
+            else:
+                conv = conv_fn(name=name,
+                                kernel_size=self.kernel_size,
+                                activation=activation,
+                                align_corners=True,
+                                interpolation=self.interpolation,
+                                coordinate_mapping=self.coordinate_mapping,
+                                normalize=False,
+                                window_function=window_fn,
+                                radius_search_ignore_query_points=True,
+                                **kwargs)
 
             self._all_convs.append((name, conv))
             return conv
@@ -237,13 +283,32 @@ class MyParticleNetwork(tf.keras.Model):
         self.mask=-1
         #次级的卷积和全连接
         for i in range(1, len(self.layer_channels)):
+            print('zxc layer channel')
+            print(self.layer_channels[i])#64 64 3
             ch = self.layer_channels[i]
             dense = tf.keras.layers.Dense(units=ch,
                                           name="dense{0}".format(i),
                                           activation=None)
-            conv = Conv(name='conv{0}'.format(i), filters=ch, activation=None)
+
+            # 多次调用 
+            if(prmdmcf and i==len(self.layer_channels)-1):
+                conv = Conv(name='conv{0}'.format(i), filters=ch, activation=None,symmetric=True)
+                print('zxc build SYM kernel:\t'+str('conv{0}'.format(i)))
+                # conv3
+                # total trainable param num:68w
+                # 不开启这个 ：69w
+                
+            else:
+                conv = Conv(name='conv{0}'.format(i), filters=ch, activation=None)
             self.denses.append(dense)
             self.convs.append(conv)
+
+
+        # conv = Conv(name='zxcsym', filters=ch, activation=None,symmetric=True)
+        # self.convs.append(conv)
+        # assert(False)
+        
+
 
     def integrate_pos_vel(self, pos1, vel1):
         """Apply gravity and integrate position and velocity"""
@@ -271,8 +336,11 @@ class MyParticleNetwork(tf.keras.Model):
                            fixed_radius_search_hash_table=None):
         """Expects that the pos and vel has already been updated with gravity and velocity"""
 
+        # assert(fe_inited==True)
         # compute the extent of the filters (the diameter)
         filter_extent = tf.constant(self.filter_extent)
+        filter_extent0 = tf.constant(self.filter_extent0)
+
 
         fluid_feats = [tf.ones_like(pos[:, 0:1]), vel]
         # print('zxc feat-------------')
@@ -286,12 +354,15 @@ class MyParticleNetwork(tf.keras.Model):
 
         fluid_feats = tf.concat(fluid_feats, axis=-1)
 
+
+        #RS_1layer_(RSL)
+
         #zxc 这里才是正向执行，Init里只是搭建网络
         self.ans_conv0_fluid = self.conv0_fluid(fluid_feats, pos, pos,
                                                 filter_extent)
         self.ans_dense0_fluid = self.dense0_fluid(fluid_feats)
         self.ans_conv0_obstacle = self.conv0_obstacle(box_feats, box, pos,
-                                                      filter_extent)
+                                                      filter_extent0)
         
         # 第一次concat
         
@@ -302,6 +373,7 @@ class MyParticleNetwork(tf.keras.Model):
         # if(self.ans_conv0_fluid.shape[0]!=1):
         #     assert(False)
         
+        # 第一层的输出
         feats = tf.concat([
             self.ans_conv0_obstacle, self.ans_conv0_fluid, self.ans_dense0_fluid
         ],
@@ -315,6 +387,9 @@ class MyParticleNetwork(tf.keras.Model):
             #partnum 96
             #partnum 64
             #partnum 64
+            
+            # https://www.open3d.org/docs/0.11.0/python_api/open3d.ml.tf.layers.ContinuousConv.html
+            # 对应到call方法里的第四个参数
             ans_conv = conv(inp_feats, pos, pos, filter_extent)
             ans_dense = dense(inp_feats)
             if ans_dense.shape[-1] == self.ans_convs[-1].shape[-1]:
@@ -372,6 +447,8 @@ class MyParticleNetwork(tf.keras.Model):
         tune=-1
 
         self.aenergy.append(energy)    
+        # print(ensure_2d(mv.numpy()).shape) 
+        # self.amv.append(ensure_2d(mv.numpy()))
         print('[energy]\t'+str(energy))
 
         #testterm toomuch
@@ -602,8 +679,10 @@ class MyParticleNetwork(tf.keras.Model):
             #curve
             tune0=prmtune0
             tuneend=prmtuneend
+            
             tune=x1(tune0=tune0,tuneend=tuneend,step=step,num_steps=num_steps)
 
+            # tune=oscillating(t=step,y0=tune0,y1=tuneend,t0=num_steps,n=6)
 
 
                 
@@ -611,8 +690,8 @@ class MyParticleNetwork(tf.keras.Model):
                 tune=np.load('tunecurve.npy')[step]
             #line
             # tune=((num_steps-step)**1)*tune0/num_steps**1
-            if(step>1000):
-                tune=tuneend
+            # if(step>1000):
+                # tune=tuneend
 
             print('[now tune]\t'+str(tune))
 
@@ -814,11 +893,24 @@ class MyParticleNetwork(tf.keras.Model):
             else:
                 coff=predictincconv(delta_energy1,delta_energy2,delta_energy3,delta_energy4,partnum,tune)
                 print(tf.reduce_mean(pos_correction1,axis=0).shape)#(3,)
+
+
+                if(prmfixcoff):
+
+                    coff=np.ones_like(coff)
+                    if(step>=500 and step<=800):
+                        coff*=(0.187474-0.1)*(step-500)/(500-800)+0.187474
+                    elif(step>=800):
+                        coff*=0.1
+                    else:
+                        assert(False)
+
                 # assert(False)
 
             print('coff:')
 
             print(coff.shape)#3,9
+            print(coff)
 
             # print('dE:')
             # temp=[delta_energy1,delta_energy2,delta_energy3,delta_energy4]
@@ -1373,7 +1465,24 @@ class MyParticleNetwork(tf.keras.Model):
         if(not prm_train and not (prm_exportgap>1000) ):
             energy=getEnergy(vel=_vel,mask=self.mask,partnum=partnum)
             self.aenergy.append(energy)
+            from util import ensure_2d
+          
             print('[energy]\t'+str(energy))
+            print(type(_vel))
+            print(_vel.shape)#partnum 3
+            mv=tf.reduce_sum(_vel,axis=0)
+            print(mv.shape)#3
+            print(mv.numpy().shape)
+            
+            self.amv.append(ensure_2d(mv.numpy()))
+            print(ensure_2d(mv.numpy()).shape)
+            # if(_vel.shape[0]>1):
+                # assert(False)
+            print('[mv x]'+str(mv[0]))
+            print('[mv y]'+str(mv[1]))
+            print('[mv z]'+str(mv[2]))
+
+            
 
 
         #testterm toomuch
