@@ -58,10 +58,17 @@ def boatdown(wallmoveidx,box):
 
 
 #自转
+nowAngle=0
 def rotationself(wallmoveidx,box,center=tf.constant([0,0,0]),vel=1.0/40.0,axis=1,\
 partnum=-1,ratio=1):
     
     angle = tf.constant(np.pi * vel)*ratio
+    
+    global nowAngle
+    nowAngle+=angle
+    
+    print('[d Angle]\t'+str(angle))
+    print('[now Angle]\t'+str(nowAngle))
 
     # 定义绕 y 轴的旋转矩阵
     if(axis==1):
@@ -83,7 +90,7 @@ partnum=-1,ratio=1):
     else:
         box[wallmoveidx:wallmoveidx+partnum]=\
         tf.matmul(box[wallmoveidx:wallmoveidx+partnum]-center, rotation_matrix)+center
-
+    return nowAngle
 
 
 

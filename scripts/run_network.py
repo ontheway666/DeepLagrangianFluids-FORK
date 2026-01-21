@@ -1323,7 +1323,7 @@ def run_sim_tf(trainscript_module, weights_path, scene, num_steps, output_dir,
                     proppartnum=wallinfo[1][0]
 
                     statictime=0
-                    statictime=50
+                    # statictime=50
                     # statictime=120
                     
                     
@@ -1331,11 +1331,12 @@ def run_sim_tf(trainscript_module, weights_path, scene, num_steps, output_dir,
 
 
                     waittime=10
-                    waittime=50
+                    # waittime=50
                     # waittime=99999
 
 
                     rotatetime=700
+                    rotatetime=9999
 
 
                     if(step<statictime):
@@ -1372,6 +1373,7 @@ def run_sim_tf(trainscript_module, weights_path, scene, num_steps, output_dir,
                         # rotscale=0.5
      
 
+                        nowAngle=\
                         rotationself(wallmoveidx=wallmoveidx,\
                                     box=box,center=tf.constant([-1.0398,0.1935,1.1020])*scenesize,
                                     vel=-1.0*rotscale/120.0,axis=1,partnum=proppartnum,\
@@ -1379,6 +1381,15 @@ def run_sim_tf(trainscript_module, weights_path, scene, num_steps, output_dir,
                                     
                                     
                                      )
+                        angleeps=(np.mod(nowAngle, 2 * np.pi) - np.pi*3/2 )
+                        if(angleeps<0 and abs(angleeps)<0.1):
+                            print('[achieve 180 at frame] '+str(step))
+                            print('[eps]\t'+str(angleeps))
+                            rotationself(wallmoveidx=wallmoveidx,\
+                                box=box,center=tf.constant([-1.0398,0.1935,1.1020])*scenesize,
+                                vel=1 ,axis=1,partnum=proppartnum,\
+                                )
+                            
                     else:
                         moverigid(wallmoveidx,proppartnum*4,box,speed=(0.3+0.2)*scenesize/movetime,axis=1)
 
